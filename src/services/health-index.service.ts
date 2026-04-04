@@ -46,16 +46,14 @@ export interface HealthConfig {
 
 interface HealthFactor {
   parameter: string;
-  impact: number;
   status: string;
   message: string;
 }
 
 export interface HealthResult {
-  index: number;
-  grade: string;
+  score: number;
+  grade: 'A' | 'B' | 'C' | 'D' | 'E';
   factors: HealthFactor[];
-  confidence: number;
 }
 
 @Injectable()
@@ -103,7 +101,6 @@ export class HealthIndexService {
 
       factors.push({
         parameter: param,
-        impact: Math.round(contribution * 100),
         status,
         message: this.buildFactorMessage(param, value, optimal, status),
       });
@@ -114,13 +111,12 @@ export class HealthIndexService {
     const criticalPenalty = criticalCount > 0 ? 0.5 : 1.0;
 
     const adjustedScore = totalScore * confidenceFactor * criticalPenalty;
-    const index = Math.round(adjustedScore * 100);
+    const score = Math.round(adjustedScore * 100);
 
     return {
-      index,
-      grade: this.calculateGrade(index),
-      factors: factors.sort((a, b) => b.impact - a.impact),
-      confidence: confidenceFactor,
+      score,
+      grade: this.calculateGrade(score),
+      factors: factors,
     };
   }
 
@@ -184,11 +180,11 @@ export class HealthIndexService {
     return 1;
   }
 
-  private calculateGrade(index: number): string {
-    if (index >= 85) return 'A';
-    if (index >= 70) return 'B';
-    if (index >= 55) return 'C';
-    if (index >= 40) return 'D';
+  private calculateGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'E' {
+    if (score >= 85) return 'A';
+    if (score >= 70) return 'B';
+    if (score >= 55) return 'C';
+    if (score >= 40) return 'D';
     return 'E';
   }
 
