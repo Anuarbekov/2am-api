@@ -29,6 +29,7 @@ export class TelemetryController {
       new Date(Date.now() - 10000),
       1,
     );
+    
     if (data.length === 0) {
       return { error: 'No data found' };
     }

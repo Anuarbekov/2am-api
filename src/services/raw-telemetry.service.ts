@@ -27,13 +27,12 @@ export class RawTelemetryService {
       order: { timestamp: 'ASC' },
       take: limit,
     });
-
     if (rawData.length === 0) {
       return [];
     }
 
     const processed = await this.signalProcessing.processRawData(rawData);
-
+   
     if (processed.length > 0) {
       this.signalProcessing.setLastProcessedValue(
         processed[processed.length - 1].timestamp,

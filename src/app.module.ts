@@ -8,8 +8,7 @@ import { HealthIndexService } from './services/health-index.service';
 import { SignalProcessingService } from './services/signal-processing.service';
 import { RawTelemetryService } from './services/raw-telemetry.service';
 import { TelemetryController } from './controllers/telemetry.controller';
-import {TelemetryReading} from "./db/telemetry-reading.entity";
-import {TelemetryModule} from "./db/telementry.module";
+import { TelemetryModule } from './db/telementry.module';
 
 @Module({
   imports: [
@@ -26,13 +25,13 @@ import {TelemetryModule} from "./db/telementry.module";
         username: config.get<string>('DB_USERNAME'),
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
-        entities: [TelemetryReading],
+        entities: [RawTelemetry],
         autoLoadEntities: true,
         synchronize: true, // dev only
       }),
     }),
     TypeOrmModule.forFeature([RawTelemetry]),
-      TelemetryModule
+    TelemetryModule,
   ],
   controllers: [TelemetryController],
   providers: [

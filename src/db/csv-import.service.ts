@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TelemetryReading } from './telemetry-reading.entity';
+import { RawTelemetry } from '../entities/raw-telemetry.entity';
 import { DeepPartial } from 'typeorm';
 import { CsvTelemetryRow } from './csv-row.interface';
 
@@ -14,8 +14,8 @@ export class CsvImportService {
     private readonly logger = new Logger(CsvImportService.name);
 
     constructor(
-        @InjectRepository(TelemetryReading)
-        private readonly repo: Repository<TelemetryReading>,
+        @InjectRepository(RawTelemetry)
+        private readonly repo: Repository<RawTelemetry>,
     ) {}
 
     async importFromCsv(filePath: string): Promise<void> {
@@ -25,7 +25,7 @@ export class CsvImportService {
             throw new Error(`CSV file not found: ${absolutePath}`);
         }
 
-        const rows: TelemetryReading[] = [];
+        const rows: RawTelemetry[] = [];
 
         return new Promise((resolve, reject) => {
             fs.createReadStream(absolutePath)
@@ -57,14 +57,14 @@ export class CsvImportService {
         });
     }
 
-    private mapRow(data: CsvTelemetryRow): TelemetryReading {
+    private mapRow(data: CsvTelemetryRow): RawTelemetry {
         return this.repo.create({
             timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
             temp: this.toNumber(data.temp),
             pressure: this.toNumber(data.pressure),
             fuel: this.toNumber(data.fuel),
             speed: this.toNumber(data.speed),
-        } as DeepPartial<TelemetryReading>);
+        } as DeepPartial<RawTelemetry>);
     }
 
     private toNumber(value: any): number | null {

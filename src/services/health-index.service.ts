@@ -40,10 +40,10 @@ export interface HealthResult {
 @Injectable()
 export class HealthIndexService {
   private readonly config: HealthConfig = {
-    speed: { weight: 0.2, optimal: [40, 80], critical: [0, 120] },
-    fuel: { weight: 0.25, optimal: [20, 100], critical: [0, 100] },
-    pressure: { weight: 0.25, optimal: [3.5, 4.5], critical: [2, 6] },
-    temp: { weight: 0.3, optimal: [75, 90], critical: [60, 100] },
+    speed: { weight: 0.2, optimal: [0, 80], critical: [80.1, 120] },
+    fuel: { weight: 0.25, optimal: [20.1, 100], critical: [0, 20] },
+    pressure: { weight: 0.25, optimal: [0, 5], critical: [5.1, 10] },
+    temp: { weight: 0.3, optimal: [75, 90], critical: [90.1, 100] },
   };
 
   computeHealthFromProcessed(data: ProcessedTelemetry): HealthResult {
