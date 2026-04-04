@@ -8,6 +8,7 @@ import { HealthIndexService } from './services/health-index.service';
 import { SignalProcessingService } from './services/signal-processing.service';
 import { RawTelemetryService } from './services/raw-telemetry.service';
 import { TelemetryController } from './controllers/telemetry.controller';
+import {TelemetryReading} from "./db/telemetry-reading.entity";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { TelemetryController } from './controllers/telemetry.controller';
         username: config.get<string>('DB_USERNAME'),
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
+        entities: [TelemetryReading],
         autoLoadEntities: true,
         synchronize: true, // dev only
       }),
