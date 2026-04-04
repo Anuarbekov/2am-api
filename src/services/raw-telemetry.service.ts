@@ -84,21 +84,21 @@ export class RawTelemetryService {
     return smoothed;
   }
 
-  async getLatestTimestamp(): Promise<Date | null> {
-    const latest = await this.rawRepository.findOne({
-      order: { timestamp: 'DESC' },
+  async getOldestTimestamp(): Promise<Date | null> {
+    const oldest = await this.rawRepository.findOne({
+      order: { timestamp: 'ASC' },
     });
-    return latest?.timestamp || null;
+    return oldest?.timestamp || null;
   }
 
-  async getLatestProcessed(): Promise<ProcessedTelemetry | null> {
-    const latestRaw = await this.rawRepository.findOne({
+  async getOldestProcessed(): Promise<ProcessedTelemetry | null> {
+    const oldestRaw = await this.rawRepository.findOne({
       where: { quality: MoreThanOrEqual(50) },
-      order: { timestamp: 'DESC' },
+      order: { timestamp: 'ASC' },
     });
-    if (!latestRaw) return null;
+    if (!oldestRaw) return null;
 
-    const processed = await this.signalProcessing.processRawData([latestRaw]);
+    const processed = await this.signalProcessing.processRawData([oldestRaw]);
 
     if (processed.length > 0) {
       this.signalProcessing.setLastProcessedValue(

@@ -5,6 +5,18 @@ import { HealthIndexService } from '../services/health-index.service';
 import { HealthResult } from '../interfaces/health-result.interface';
 import { ProcessedTelemetry } from '../services/signal-processing.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+interface TelemetryResponse {
+  timestamp: Date;
+  effective: {
+    temp: number;
+    pressure: number;
+    fuel: number;
+    speed: number;
+    engine: number;
+    brake: number;
+  };
+  healthIndex: HealthResult;
+}
 
 @ApiTags('telemetry')
 @Controller('api/telemetry')
@@ -14,21 +26,30 @@ export class TelemetryController {
     private healthIndexService: HealthIndexService,
   ) {}
 
-  @Get('latest')
-  @ApiOperation({ summary: 'Get latest telemetry' })
+  @Get('oldest')
+  @ApiOperation({ summary: 'Get oldest telemetry' })
   @ApiResponse({
     status: 200,
-    description: 'Returns latest telemetry with health index',
+    description: 'Returns oldest telemetry with health index',
   })
-  async getLatest(): Promise<
-    { data: ProcessedTelemetry; health: HealthResult } | { error: string }
-  > {
-    const data = await this.rawTelemetryService.getLatestProcessed();
+  async getOldest(): Promise<TelemetryResponse | null> {
+    const data = await this.rawTelemetryService.getOldestProcessed();
     if (!data) {
-      return { error: 'No data found' };
+      return null;
     }
     const health = this.healthIndexService.computeHealthFromProcessed(data);
-    return { data, health };
+    return {
+      timestamp: data.timestamp,
+      effective: {
+        temp: data.temp,
+        pressure: data.pressure,
+        fuel: data.fuel,
+        speed: data.speed,
+        engine: data.engine,
+        brake: data.brake,
+      },
+      healthIndex: health,
+    };
   }
 
   @Get('history')
@@ -79,7 +100,7 @@ export class TelemetryController {
     let csv = 'timestamp,fuel,pressure,temp,speed,health_index,health_grade\n';
     for (const row of data) {
       const health = this.healthIndexService.computeHealthFromProcessed(row);
-      csv += `${row.timestamp},${row.fuel},${row.pressure},${row.temp},${row.speed},${health.index},${health.grade}\n`;
+      csv += `${row.timestamp},${row.fuel},${row.pressure},${row.temp},${row.speed},${health.score},${health.grade}\n`;
     }
 
     res.setHeader('Content-Type', 'text/csv');
