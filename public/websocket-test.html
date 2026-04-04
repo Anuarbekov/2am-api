@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telemetry live test</title>
+    <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: #1a2332;
+        --border: #2d3a4d;
+        --text: #e7ecf3;
+        --muted: #8b9cb3;
+        --accent: #3d9cf5;
+        --good: #3ecf8e;
+        --warn: #f5a623;
+        --bad: #e85d75;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        margin: 0;
+        padding: 1.5rem;
+        min-height: 100vh;
+      }
+      .wrap {
+        max-width: 880px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.35rem;
+        font-weight: 600;
+        margin: 0 0 0.35rem;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 0.875rem;
+        margin-bottom: 1.25rem;
+        line-height: 1.45;
+      }
+      .hint code {
+        background: var(--panel);
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+      }
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        background: var(--panel);
+        border: 1px solid var(--border);
+      }
+      .pill .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .pill.connecting .dot {
+        background: var(--warn);
+        animation: pulse 1s ease infinite;
+      }
+      .pill.connected .dot {
+        background: var(--good);
+      }
+      .pill.error .dot {
+        background: var(--bad);
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.35;
+        }
+      }
+      .progress-wrap {
+        margin-bottom: 1.25rem;
+      }
+      .progress-wrap label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-bottom: 0.35rem;
+      }
+      .bar {
+        height: 8px;
+        background: var(--panel);
+        border-radius: 4px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: var(--accent);
+        transition: width 0.25s ease;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.65rem;
+        margin-bottom: 1.25rem;
+      }
+      .metric {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.85rem;
+      }
+      .metric .label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-bottom: 0.25rem;
+      }
+      .metric .value {
+        font-size: 1.35rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .health-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1.25rem;
+      }
+      .health-panel h2 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 0.5rem;
+        font-weight: 600;
+      }
+      .health-panel pre {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--text);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .log {
+        background: #080b0f;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.85rem;
+        max-height: 220px;
+        overflow: auto;
+        font-size: 0.72rem;
+        font-family: ui-monospace, 'Cascadia Code', monospace;
+        color: #9ae6b4;
+        line-height: 1.4;
+      }
+      .log h2 {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 0.5rem;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+      }
+      .empty-state {
+        color: var(--muted);
+        font-size: 0.9rem;
+        padding: 2rem 1rem;
+        text-align: center;
+        background: var(--panel);
+        border: 1px dashed var(--border);
+        border-radius: 10px;
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Telemetry stream</h1>
+      <p class="hint">
+        Open this page at
+        <code>http://localhost:3000/websocket-test.html</code> (same host as the
+        API). Namespace <code>/telemetry</code>, one row every ~3s, oldest → newest.
+      </p>
+
+      <div class="status-row">
+        <span id="statusPill" class="pill connecting"
+          ><span class="dot"></span> <span id="statusText">Connecting…</span></span
+        >
+        <span id="socketId" class="pill" style="display: none"></span>
+      </div>
+
+      <div class="progress-wrap">
+        <label>Stream progress</label>
+        <div class="bar"><i id="progressBar"></i></div>
+        <div
+          id="progressLabel"
+          style="font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem"
+        >
+          Waiting for data…
+        </div>
+      </div>
+
+      <div id="emptyState" class="empty-state">
+        Waiting for the first <code>telemetry</code> event…
+      </div>
+
+      <div id="metrics" class="grid" style="display: none"></div>
+      <div id="healthBox" class="health-panel" style="display: none">
+        <h2>Health (latest)</h2>
+        <pre id="healthJson"></pre>
+      </div>
+
+      <div class="log">
+        <h2>Event log</h2>
+        <div id="log"></div>
+      </div>
+    </div>
+
+    <script>
+      const logEl = document.getElementById('log');
+      const statusPill = document.getElementById('statusPill');
+      const statusText = document.getElementById('statusText');
+      const socketIdEl = document.getElementById('socketId');
+      const progressBar = document.getElementById('progressBar');
+      const progressLabel = document.getElementById('progressLabel');
+      const emptyState = document.getElementById('emptyState');
+      const metricsEl = document.getElementById('metrics');
+      const healthBox = document.getElementById('healthBox');
+      const healthJson = document.getElementById('healthJson');
+
+      function setStatus(kind, text) {
+        statusPill.className = 'pill ' + kind;
+        statusText.textContent = text;
+      }
+
+      function logLine(msg) {
+        const t = new Date().toLocaleTimeString();
+        logEl.textContent += '[' + t + '] ' + msg + '\n';
+        logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
+      }
+
+      function fmt(n) {
+        if (n === null || n === undefined || Number.isNaN(n)) return '—';
+        return typeof n === 'number' ? n.toFixed(2) : String(n);
+      }
+
+      function renderTelemetry(payload) {
+        const d = payload.data || {};
+        emptyState.style.display = 'none';
+        metricsEl.style.display = 'grid';
+        healthBox.style.display = 'block';
+
+        metricsEl.innerHTML = [
+          ['Time', d.timestamp ? new Date(d.timestamp).toLocaleString() : '—'],
+          ['Fuel', fmt(d.fuel)],
+          ['Pressure', fmt(d.pressure)],
+          ['Temp', fmt(d.temp)],
+          ['Speed', fmt(d.speed)],
+          ['Quality', d.quality != null ? String(d.quality) : '—'],
+          ['Confidence', fmt(d.confidence)],
+        ]
+          .map(
+            ([label, val]) =>
+              '<div class="metric"><div class="label">' +
+              label +
+              '</div><div class="value">' +
+              val +
+              '</div></div>',
+          )
+          .join('');
+
+        healthJson.textContent = JSON.stringify(payload.health || {}, null, 2);
+      }
+
+      const socketOpts = {
+        path: '/socket.io',
+        transports: ['polling', 'websocket'],
+        reconnectionDelayMax: 5000,
+      };
+      const socket =
+        window.location.protocol === 'file:'
+          ? io('http://localhost:3000/telemetry', socketOpts)
+          : io('/telemetry', socketOpts);
+
+      socket.on('connect', () => {
+        setStatus('connected', 'Connected');
+        socketIdEl.style.display = 'inline-flex';
+        socketIdEl.textContent = 'id: ' + socket.id;
+        logLine('socket connect ' + socket.id);
+      });
+
+      socket.on('connected', (p) => {
+        logLine('connected ' + JSON.stringify(p));
+      });
+
+      socket.on('telemetry', (p) => {
+        logLine('telemetry #' + (p.data && p.type ? p.type : 'update'));
+        renderTelemetry(p);
+      });
+
+      socket.on('stream-progress', (p) => {
+        const pct = parseFloat(p.percentage) || 0;
+        progressBar.style.width = pct + '%';
+        progressLabel.textContent =
+          'Record ' + p.current + ' / ' + p.total + ' (' + p.percentage + '%)';
+        logLine(
+          'progress ' + p.current + '/' + p.total + ' (' + p.percentage + '%)',
+        );
+      });
+
+      socket.on('stream-complete', (p) => {
+        setStatus('connected', 'Stream complete');
+        logLine('stream-complete ' + JSON.stringify(p));
+        progressLabel.textContent =
+          'Done — ' + (p.totalRecords || '?') + ' records';
+      });
+
+      socket.on('no-data', (p) => {
+        setStatus('error', 'No data');
+        emptyState.textContent =
+          'No rows in raw_telemetry (or all filtered). ' + JSON.stringify(p);
+        emptyState.style.display = 'block';
+        logLine('no-data ' + JSON.stringify(p));
+      });
+
+      socket.on('error', (p) => {
+        setStatus('error', 'Error');
+        logLine('error ' + JSON.stringify(p));
+      });
+
+      socket.on('disconnect', (r) => {
+        setStatus('error', 'Disconnected');
+        socketIdEl.style.display = 'none';
+        logLine('disconnect ' + r);
+      });
+
+      socket.on('connect_error', (e) => {
+        setStatus('error', 'Connect failed');
+        logLine('connect_error: ' + (e && e.message ? e.message : e));
+        emptyState.innerHTML =
+          '<strong>Could not reach Socket.IO.</strong><br />' +
+          'Use <code>http://localhost:3000/websocket-test.html</code> with the API running on port 3000.<br />' +
+          '<small style="color:var(--muted)">' +
+          (e && e.message ? e.message : '') +
+          '</small>';
+        emptyState.style.display = 'block';
+      });
+    </script>
+  </body>
+</html>
