@@ -5,6 +5,16 @@ import {
     CreateDateColumn,
 } from 'typeorm';
 
+/*
+
+temp: Celsius
+pressure: kPa or bar
+speed: km/h
+fuel: liters
+
+
+*/
+
 @Entity('telemetry_readings')
 export class TelemetryReading {
     @PrimaryGeneratedColumn('uuid')

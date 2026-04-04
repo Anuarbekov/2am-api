@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TelemetryReading } from './telemetry-reading.entity';
 import { DeepPartial } from 'typeorm';
+import { CsvTelemetryRow } from './csv-row.interface';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -37,21 +38,26 @@ export class CsvImportService {
                         this.logger.warn(`Skipping invalid row: ${JSON.stringify(data)}`);
                     }
                 })
-                .on('end', async () => {
-                    this.logger.log(`Parsed ${rows.length} rows`);
-
-                    // Batch insert for performance
-                    await this.repo.save(rows, { chunk: 500 });
-
-                    this.logger.log('CSV import completed');
-                    resolve();
-                })
                 .on('error', (err) => {
                     reject(err);
+                })
+                .on('end', () => {
+                    this.logger.log(`Parsed ${rows.length} rows. Starting database insertion...`);
+
+                    this.repo.save(rows, { chunk: 500 })
+                        .then(() => {
+                            this.logger.log('CSV import completed successfully');
+                            resolve();
+                        })
+                        .catch((err) => {
+                            this.logger.error('Database save failed', err);
+                            reject(err);
+                        });
                 });
         });
     }
-    private mapRow(data: any): TelemetryReading {
+
+    private mapRow(data: CsvTelemetryRow): TelemetryReading {
         return this.repo.create({
             timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
             temp: this.toNumber(data.temp),
