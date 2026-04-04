@@ -9,6 +9,7 @@ import { SignalProcessingService } from './services/signal-processing.service';
 import { RawTelemetryService } from './services/raw-telemetry.service';
 import { TelemetryController } from './controllers/telemetry.controller';
 import {TelemetryReading} from "./db/telemetry-reading.entity";
+import {TelemetryModule} from "./db/telementry.module";
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import {TelemetryReading} from "./db/telemetry-reading.entity";
       }),
     }),
     TypeOrmModule.forFeature([RawTelemetry]),
+      TelemetryModule
   ],
   controllers: [TelemetryController],
   providers: [
