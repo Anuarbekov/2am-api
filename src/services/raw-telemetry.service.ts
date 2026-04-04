@@ -32,7 +32,7 @@ export class RawTelemetryService {
     }
 
     const processed = await this.signalProcessing.processRawData(rawData);
-   
+
     if (processed.length > 0) {
       this.signalProcessing.setLastProcessedValue(
         processed[processed.length - 1].timestamp,
@@ -70,7 +70,14 @@ export class RawTelemetryService {
     const smoothed = JSON.parse(JSON.stringify(data));
 
     for (let i = 2; i < data.length - 2; i++) {
-      for (const param of ['fuel', 'pressure', 'temp', 'speed'] as const) {
+      for (const param of [
+        'fuel',
+        'pressure',
+        'temp',
+        'speed',
+        'brake',
+        'engine',
+      ] as const) {
         const values: number[] = [];
         for (let j = -2; j <= 2; j++) {
           values.push(data[i + j][param]);
@@ -93,7 +100,7 @@ export class RawTelemetryService {
   async getLatestProcessed(): Promise<ProcessedTelemetry | null> {
     const latestRaw = await this.rawRepository.findOne({
       where: { quality: MoreThanOrEqual(50) },
-      order: { timestamp: 'DESC' }
+      order: { timestamp: 'DESC' },
     });
     if (!latestRaw) return null;
 

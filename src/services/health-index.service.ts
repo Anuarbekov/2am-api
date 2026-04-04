@@ -1,7 +1,22 @@
 import { Injectable } from '@nestjs/common';
-import { ProcessedTelemetry } from './signal-processing.service';
 
-export type TelemetryField = 'fuel' | 'pressure' | 'temp' | 'speed';
+export interface ProcessedTelemetry {
+  fuel: number;
+  pressure: number;
+  temp: number;
+  speed: number;
+  brake: number;
+  engine: number;
+  confidence?: number;
+}
+
+export type TelemetryField =
+  | 'fuel'
+  | 'pressure'
+  | 'temp'
+  | 'speed'
+  | 'brake'
+  | 'engine';
 
 export interface ContextCondition {
   field: TelemetryField;
@@ -25,6 +40,8 @@ export interface HealthConfig {
   fuel: MetricHealthConfig;
   pressure: MetricHealthConfig;
   temp: MetricHealthConfig;
+  brake: MetricHealthConfig;
+  engine: MetricHealthConfig;
 }
 
 interface HealthFactor {
@@ -41,123 +58,14 @@ export interface HealthResult {
   confidence: number;
 }
 
-function matchesCondition(
-  data: ProcessedTelemetry,
-  c: ContextCondition,
-): boolean {
-  const v = data[c.field];
-  switch (c.op) {
-    case 'lte':
-      return v <= c.value;
-    case 'lt':
-      return v < c.value;
-    case 'gte':
-      return v >= c.value;
-    case 'gt':
-      return v > c.value;
-    case 'eq':
-      return v === c.value;
-    default:
-      return false;
-  }
-}
-
-function resolveBands(
-  cfg: MetricHealthConfig,
-  data: ProcessedTelemetry,
-): { optimal: [number, number]; critical: [number, number] } {
-  if (cfg.contextualBands) {
-    for (const rule of cfg.contextualBands) {
-      if (rule.when.every((c) => matchesCondition(data, c))) {
-        return { optimal: rule.optimal, critical: rule.critical };
-      }
-    }
-  }
-  return { optimal: cfg.optimal, critical: cfg.critical };
-}
-
-function scoreInBand(
-  value: number,
-  optimal: [number, number],
-  critical: [number, number],
-): number {
-  const [optLo, optHi] = optimal;
-  const [, critHi] = critical;
-
-  if (value < optLo) {
-    if (optLo <= 0) {
-      return value < 0 ? 0 : 1;
-    }
-    return Math.max(0, value / optLo);
-  }
-
-  if (value > optHi) {
-    const span = critHi - optHi;
-    if (span <= 0) {
-      return 0;
-    }
-    return Math.max(0, 1 - (value - optHi) / span);
-  }
-
-  return 1;
-}
-
-function buildFactorMessage(
-  parameter: string,
-  value: number,
-  optimal: [number, number],
-  status: string,
-): string {
-  if (status === 'normal') {
-    switch (parameter) {
-      case 'temp':
-        return 'Temperature is within a healthy range.';
-      case 'pressure':
-        return 'Pressure is within a healthy range.';
-      case 'fuel':
-        return 'Fuel level is adequate.';
-      case 'speed':
-        return 'Speed is within a safe range.';
-      default:
-        return 'Operating within normal range.';
-    }
-  }
-
-  const [optLo, optHi] = optimal;
-  const high = value > optHi;
-  const low = value < optLo;
-
-  switch (parameter) {
-    case 'temp':
-      if (high) return 'Temperature is high, try to slow down.';
-      if (low)
-        return 'Temperature is low; allow the engine to reach operating temperature.';
-      break;
-    case 'pressure':
-      if (high) return 'Pressure is too high, try not to gas.';
-      if (low) return 'Pressure is low; check the system.';
-      break;
-    case 'fuel':
-      if (low) return 'Fuel level is low; refuel when possible.';
-      if (high) return 'Fuel reserve is high.';
-      break;
-    case 'speed':
-      if (high) return 'Speed is high; reduce to a safer pace.';
-      if (low) return 'Speed is low; adjust if conditions require more pace.';
-      break;
-  }
-
-  return `${parameter} needs attention.`;
-}
-
 @Injectable()
 export class HealthIndexService {
   private readonly config: HealthConfig = {
-    speed: { weight: 0.2, optimal: [0, 80], critical: [80.1, 120] },
-    fuel: { weight: 0.25, optimal: [100.1, 1000], critical: [0, 100] },
-    pressure: { weight: 0.25, optimal: [5, 10], critical: [10.1, 15] },
+    speed: { weight: 0.1, optimal: [0, 80], critical: [80.1, 120] },
+    fuel: { weight: 0.2, optimal: [100.1, 1000], critical: [0, 100] },
+    pressure: { weight: 0.15, optimal: [0, 8.9], critical: [9, 20] },
     temp: {
-      weight: 0.3,
+      weight: 0.15,
       optimal: [75, 90],
       critical: [90.1, 100],
       contextualBands: [
@@ -168,48 +76,162 @@ export class HealthIndexService {
         },
       ],
     },
+    brake: { weight: 0.2, optimal: [65.1, 100], critical: [0, 65] },
+    engine: { weight: 0.2, optimal: [65.1, 100], critical: [0, 65] },
   };
 
   computeHealthFromProcessed(data: ProcessedTelemetry): HealthResult {
     let totalScore = 0;
+    let criticalCount = 0;
     const factors: HealthFactor[] = [];
 
     for (const [param, cfg] of Object.entries(this.config)) {
       const value = data[param as keyof ProcessedTelemetry] as number;
-      const { optimal, critical } = resolveBands(cfg, data);
-      const score = scoreInBand(value, optimal, critical);
+      const { optimal, critical } = this.resolveBands(cfg, data);
+      const score = this.scoreInBand(value, optimal, critical);
 
       const contribution = score * cfg.weight;
       totalScore += contribution;
 
       let status = 'normal';
-      if (score < 0.5) status = 'critical';
-      else if (score < 0.75) status = 'warning';
+      if (score < 0.5) {
+        status = 'critical';
+        criticalCount++;
+      } else if (score < 0.75) {
+        status = 'warning';
+      }
 
       factors.push({
         parameter: param,
         impact: Math.round(contribution * 100),
         status,
-        message: buildFactorMessage(param, value, optimal, status),
+        message: this.buildFactorMessage(param, value, optimal, status),
       });
     }
-    const confidenceFactor = data.confidence ?? 0.8;
-    const adjustedScore = totalScore * confidenceFactor;
-    const index = Math.round(adjustedScore * 100);
 
-    let grade: string;
-    if (index >= 85) grade = 'A';
-    else if (index >= 70) grade = 'B';
-    else if (index >= 55) grade = 'C';
-    else if (index >= 40) grade = 'D';
-    else grade = 'E';
+    const confidenceFactor = data.confidence ?? 0.8;
+
+    const criticalPenalty = criticalCount > 0 ? 0.5 : 1.0;
+
+    const adjustedScore = totalScore * confidenceFactor * criticalPenalty;
+    const index = Math.round(adjustedScore * 100);
 
     return {
       index,
-      grade,
+      grade: this.calculateGrade(index),
       factors: factors.sort((a, b) => b.impact - a.impact),
       confidence: confidenceFactor,
     };
+  }
+
+  private resolveBands(
+    cfg: MetricHealthConfig,
+    data: ProcessedTelemetry,
+  ): { optimal: [number, number]; critical: [number, number] } {
+    if (cfg.contextualBands) {
+      for (const rule of cfg.contextualBands) {
+        if (rule.when.every((c) => this.matchesCondition(data, c))) {
+          return { optimal: rule.optimal, critical: rule.critical };
+        }
+      }
+    }
+    return { optimal: cfg.optimal, critical: cfg.critical };
+  }
+
+  private matchesCondition(
+    data: ProcessedTelemetry,
+    c: ContextCondition,
+  ): boolean {
+    const v = data[c.field] ?? 0;
+    switch (c.op) {
+      case 'lte':
+        return v <= c.value;
+      case 'lt':
+        return v < c.value;
+      case 'gte':
+        return v >= c.value;
+      case 'gt':
+        return v > c.value;
+      case 'eq':
+        return v === c.value;
+      default:
+        return false;
+    }
+  }
+
+  private scoreInBand(
+    value: number,
+    optimal: [number, number],
+    critical: [number, number],
+  ): number {
+    const [optLo, optHi] = optimal;
+    const [critLo, critHi] = critical;
+
+    if (value < optLo) {
+      const range = optLo - critLo;
+      if (range <= 0) return 0;
+      const score = (value - critLo) / range;
+      return Math.max(0, Math.min(1, score));
+    }
+
+    if (value > optHi) {
+      const range = critHi - optHi;
+      if (range <= 0) return 0;
+      const score = 1 - (value - optHi) / range;
+      return Math.max(0, Math.min(1, score));
+    }
+
+    return 1;
+  }
+
+  private calculateGrade(index: number): string {
+    if (index >= 85) return 'A';
+    if (index >= 70) return 'B';
+    if (index >= 55) return 'C';
+    if (index >= 40) return 'D';
+    return 'E';
+  }
+
+  private buildFactorMessage(
+    parameter: string,
+    value: number,
+    optimal: [number, number],
+    status: string,
+  ): string {
+    if (status === 'normal') {
+      const normalMessages: Record<string, string> = {
+        temp: 'Temperature is within a healthy range.',
+        pressure: 'Pressure is within a healthy range.',
+        fuel: 'Fuel level is adequate.',
+        speed: 'Speed is within a safe range.',
+        brake: 'Brake condition is good.',
+        engine: 'Engine condition is good.',
+      };
+      return normalMessages[parameter] || 'Operating within normal range.';
+    }
+
+    const [optLo, optHi] = optimal;
+    const high = value > optHi;
+    const low = value < optLo;
+
+    switch (parameter) {
+      case 'temp':
+        return high ? 'Temperature is high; slow down.' : 'Engine is too cold.';
+      case 'pressure':
+        return high ? 'Pressure is too high.' : 'Pressure is too low.';
+      case 'fuel':
+        return low
+          ? 'Fuel level is low; refuel immediately.'
+          : 'Fuel overflow.';
+      case 'speed':
+        return high ? 'Speed is dangerously high.' : 'Speed is unusually low.';
+      case 'brake':
+        return 'Brake performance is degraded.';
+      case 'engine':
+        return 'Engine performance is degraded.';
+      default:
+        return `${parameter} needs attention.`;
+    }
   }
 
   getConfig(): HealthConfig {

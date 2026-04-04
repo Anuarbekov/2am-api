@@ -64,6 +64,8 @@ export class CsvImportService {
             pressure: this.toNumber(data.pressure),
             fuel: this.toNumber(data.fuel),
             speed: this.toNumber(data.speed),
+            brake: this.toNumber(data.brake),
+            engine: this.toNumber(data.engine),
         } as DeepPartial<RawTelemetry>);
     }
 
