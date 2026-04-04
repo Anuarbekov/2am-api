@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UsersModule } from './users/users.module';
-import { AuthModule } from './auth/auth.module';
+import {TelemetryReading} from "./db/telemetry-reading.entity";
 
 @Module({
   imports: [
@@ -19,13 +18,11 @@ import { AuthModule } from './auth/auth.module';
         username: config.get<string>('DB_USERNAME'),
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
+        entities: [TelemetryReading],
         autoLoadEntities: true,
         synchronize: true, // dev only
       }),
     }),
-
-    UsersModule,
-    AuthModule,
   ],
 })
 export class AppModule {}
