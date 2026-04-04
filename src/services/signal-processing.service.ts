@@ -101,16 +101,6 @@ export class SignalProcessingService {
 
     if (!isolated) {
       return run();
-      const processedItem: ProcessedTelemetry = {
-        timestamp: raw.timestamp,
-        fuel: medianFiltered.fuel ?? 0,
-        pressure: medianFiltered.pressure ?? 0,
-        temp: medianFiltered.temp ?? 0,
-        speed: medianFiltered.speed ?? 0,
-        quality: raw.quality,
-        confidence,
-      };
-      processed.push(processedItem);
     }
 
     const prevEma = this.emaState;
