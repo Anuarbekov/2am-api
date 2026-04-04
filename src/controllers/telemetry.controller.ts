@@ -16,16 +16,16 @@ export class TelemetryController {
     private healthIndexService: HealthIndexService,
   ) {}
 
-  @Get('latest')
-  @ApiOperation({ summary: 'Get latest telemetry' })
+  @Get('oldest')
+  @ApiOperation({ summary: 'Get oldest telemetry' })
   @ApiResponse({
     status: 200,
-    description: 'Returns latest telemetry with health index',
+    description: 'Returns oldest telemetry with health index',
   })
-  async getLatest(): Promise<
+  async getOldest(): Promise<
     { data: ProcessedTelemetry; health: HealthResult } | { error: string }
   > {
-    const data = await this.rawTelemetryService.getLatestProcessed();
+    const data = await this.rawTelemetryService.getOldestProcessed();
     if (!data) {
       return { error: 'No data found' };
     }
