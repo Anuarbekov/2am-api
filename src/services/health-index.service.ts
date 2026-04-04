@@ -1,33 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import { ProcessedTelemetry } from './signal-processing.service';
 
+export type TelemetryField = 'fuel' | 'pressure' | 'temp' | 'speed';
+
+export interface ContextCondition {
+  field: TelemetryField;
+  op: 'lte' | 'lt' | 'gte' | 'gt' | 'eq';
+  value: number;
+}
+
+export interface MetricHealthConfig {
+  weight: number;
+  optimal: [number, number];
+  critical: [number, number];
+  contextualBands?: Array<{
+    when: ContextCondition[];
+    optimal: [number, number];
+    critical: [number, number];
+  }>;
+}
+
 export interface HealthConfig {
-  speed: {
-    weight: number;
-    optimal: [number, number];
-    critical: [number, number];
-  };
-  fuel: {
-    weight: number;
-    optimal: [number, number];
-    critical: [number, number];
-  };
-  pressure: {
-    weight: number;
-    optimal: [number, number];
-    critical: [number, number];
-  };
-  temp: {
-    weight: number;
-    optimal: [number, number];
-    critical: [number, number];
-  };
+  speed: MetricHealthConfig;
+  fuel: MetricHealthConfig;
+  pressure: MetricHealthConfig;
+  temp: MetricHealthConfig;
 }
 
 interface HealthFactor {
   parameter: string;
   impact: number;
   status: string;
+  message: string;
 }
 
 export interface HealthResult {
@@ -37,13 +41,133 @@ export interface HealthResult {
   confidence: number;
 }
 
+function matchesCondition(
+  data: ProcessedTelemetry,
+  c: ContextCondition,
+): boolean {
+  const v = data[c.field];
+  switch (c.op) {
+    case 'lte':
+      return v <= c.value;
+    case 'lt':
+      return v < c.value;
+    case 'gte':
+      return v >= c.value;
+    case 'gt':
+      return v > c.value;
+    case 'eq':
+      return v === c.value;
+    default:
+      return false;
+  }
+}
+
+function resolveBands(
+  cfg: MetricHealthConfig,
+  data: ProcessedTelemetry,
+): { optimal: [number, number]; critical: [number, number] } {
+  if (cfg.contextualBands) {
+    for (const rule of cfg.contextualBands) {
+      if (rule.when.every((c) => matchesCondition(data, c))) {
+        return { optimal: rule.optimal, critical: rule.critical };
+      }
+    }
+  }
+  return { optimal: cfg.optimal, critical: cfg.critical };
+}
+
+function scoreInBand(
+  value: number,
+  optimal: [number, number],
+  critical: [number, number],
+): number {
+  const [optLo, optHi] = optimal;
+  const [, critHi] = critical;
+
+  if (value < optLo) {
+    if (optLo <= 0) {
+      return value < 0 ? 0 : 1;
+    }
+    return Math.max(0, value / optLo);
+  }
+
+  if (value > optHi) {
+    const span = critHi - optHi;
+    if (span <= 0) {
+      return 0;
+    }
+    return Math.max(0, 1 - (value - optHi) / span);
+  }
+
+  return 1;
+}
+
+function buildFactorMessage(
+  parameter: string,
+  value: number,
+  optimal: [number, number],
+  status: string,
+): string {
+  if (status === 'normal') {
+    switch (parameter) {
+      case 'temp':
+        return 'Temperature is within a healthy range.';
+      case 'pressure':
+        return 'Pressure is within a healthy range.';
+      case 'fuel':
+        return 'Fuel level is adequate.';
+      case 'speed':
+        return 'Speed is within a safe range.';
+      default:
+        return 'Operating within normal range.';
+    }
+  }
+
+  const [optLo, optHi] = optimal;
+  const high = value > optHi;
+  const low = value < optLo;
+
+  switch (parameter) {
+    case 'temp':
+      if (high) return 'Temperature is high, try to slow down.';
+      if (low)
+        return 'Temperature is low; allow the engine to reach operating temperature.';
+      break;
+    case 'pressure':
+      if (high) return 'Pressure is too high, try not to gas.';
+      if (low) return 'Pressure is low; check the system.';
+      break;
+    case 'fuel':
+      if (low) return 'Fuel level is low; refuel when possible.';
+      if (high) return 'Fuel reserve is high.';
+      break;
+    case 'speed':
+      if (high) return 'Speed is high; reduce to a safer pace.';
+      if (low) return 'Speed is low; adjust if conditions require more pace.';
+      break;
+  }
+
+  return `${parameter} needs attention.`;
+}
+
 @Injectable()
 export class HealthIndexService {
   private readonly config: HealthConfig = {
     speed: { weight: 0.2, optimal: [0, 80], critical: [80.1, 120] },
-    fuel: { weight: 0.25, optimal: [20.1, 100], critical: [0, 20] },
-    pressure: { weight: 0.25, optimal: [0, 5], critical: [5.1, 10] },
-    temp: { weight: 0.3, optimal: [75, 90], critical: [90.1, 100] },
+    fuel: { weight: 0.25, optimal: [100.1, 1000], critical: [0, 100] },
+    pressure: { weight: 0.25, optimal: [5, 10], critical: [10.1, 15] },
+    temp: {
+      weight: 0.3,
+      optimal: [75, 90],
+      critical: [90.1, 100],
+      contextualBands: [
+        {
+          when: [{ field: 'speed', op: 'lte', value: 1 }],
+          optimal: [0, 100],
+          critical: [100.1, 120],
+        },
+      ],
+    },
   };
 
   computeHealthFromProcessed(data: ProcessedTelemetry): HealthResult {
@@ -52,17 +176,8 @@ export class HealthIndexService {
 
     for (const [param, cfg] of Object.entries(this.config)) {
       const value = data[param as keyof ProcessedTelemetry] as number;
-
-      let score = 1;
-
-      if (value < cfg.optimal[0]) {
-        score = Math.max(0, value / cfg.optimal[0]);
-      } else if (value > cfg.optimal[1]) {
-        score = Math.max(
-          0,
-          1 - (value - cfg.optimal[1]) / (cfg.critical[1] - cfg.optimal[1]),
-        );
-      }
+      const { optimal, critical } = resolveBands(cfg, data);
+      const score = scoreInBand(value, optimal, critical);
 
       const contribution = score * cfg.weight;
       totalScore += contribution;
@@ -75,10 +190,10 @@ export class HealthIndexService {
         parameter: param,
         impact: Math.round(contribution * 100),
         status,
+        message: buildFactorMessage(param, value, optimal, status),
       });
     }
-
-    const confidenceFactor = data.confidence || 0.8;
+    const confidenceFactor = data.confidence ?? 0.8;
     const adjustedScore = totalScore * confidenceFactor;
     const index = Math.round(adjustedScore * 100);
 
