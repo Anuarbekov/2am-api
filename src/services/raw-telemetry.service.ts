@@ -55,7 +55,7 @@ export class RawTelemetryService {
       order: { timestamp: 'ASC' },
     });
 
-    let processed = await this.signalProcessing.processRawData(rawData);
+    let processed = await this.signalProcessing.processRawDataIsolated(rawData);
 
     if (options?.smooth && processed.length > 5) {
       processed = this.extraSmoothing(processed);
