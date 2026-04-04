@@ -26,6 +26,8 @@ interface ProcessedCacheEntry {
 @Injectable()
 export class SignalProcessingService {
   private readonly logger = new Logger(SignalProcessingService.name);
+  private isolationMutex = Promise.resolve();
+
   private emaState: Map<string, EMASate> = new Map();
   private recentValues: Map<string, Array<{ value: number; timestamp: Date }>> =
     new Map();
@@ -80,9 +82,79 @@ export class SignalProcessingService {
         confidence,
       };
       processed.push(processedItem);
+    return this.processRawDataSequential(rawData, false);
+  }
+
+  async processRawDataIsolated(
+    rawData: RawTelemetry[],
+  ): Promise<ProcessedTelemetry[]> {
+    const prev = this.isolationMutex;
+    let release!: () => void;
+    this.isolationMutex = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await prev;
+    try {
+      return this.processRawDataSequential(rawData, true);
+    } finally {
+      release();
+    }
+  }
+
+  private processRawDataSequential(
+    rawData: RawTelemetry[],
+    isolated: boolean,
+  ): ProcessedTelemetry[] {
+    const run = (): ProcessedTelemetry[] => {
+      const processed: ProcessedTelemetry[] = [];
+
+      for (const raw of rawData) {
+        const validated = this.validateAndRemoveOutliers(raw);
+
+        if (!validated) continue;
+
+        const smoothed = this.applyEMA(validated);
+        const medianFiltered = this.applyMedianFilter(smoothed);
+        const confidence = this.calculateConfidence(medianFiltered);
+
+        const processedItem: ProcessedTelemetry = {
+          timestamp: raw.timestamp,
+          fuel: medianFiltered.fuel ?? 0,
+          pressure: medianFiltered.pressure ?? 0,
+          temp: medianFiltered.temp ?? 0,
+          speed: medianFiltered.speed ?? 0,
+          quality: raw.quality,
+          confidence,
+        };
+
+        processed.push(processedItem);
+      }
+
+      return processed;
+    };
+
+    if (!isolated) {
+      return run();
     }
 
-    return processed;
+    const prevEma = this.emaState;
+    const prevRecent = this.recentValues;
+    const prevCache = this.lastProcessedCache;
+
+    this.emaState = new Map();
+    this.recentValues = new Map();
+    for (const param of ['fuel', 'pressure', 'temp', 'speed']) {
+      this.recentValues.set(param, []);
+    }
+    this.lastProcessedCache = new Map();
+
+    try {
+      return run();
+    } finally {
+      this.emaState = prevEma;
+      this.recentValues = prevRecent;
+      this.lastProcessedCache = prevCache;
+    }
   }
 
   private validateAndRemoveOutliers(data: RawTelemetry): RawTelemetry | null {

@@ -1,11 +1,17 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { SocketIoCorsAdapter } from './socket-io.adapter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors();
+  app.useStaticAssets(join(__dirname, '..', 'public'));
+
+  app.useWebSocketAdapter(new SocketIoCorsAdapter(app));
 
   const config = new DocumentBuilder()
     .setTitle('Locomotive Digital Twin API')
@@ -20,7 +26,13 @@ async function bootstrap() {
 
   await app.listen(3000);
   console.log('Application is running on: http://localhost:3000');
-  console.log('WebSocket: ws://localhost:3000/telemetry');
+  console.log(
+    'Socket.IO: namespace /telemetry (Postman “Socket.IO”, or socket.io-client)',
+  );
+  console.log(
+    'Raw WebSocket: /ws/telemetry[?from=&to=], /ws/telemetry/history?from=&to=, /ws/telemetry/requestReplay?minutes= — JSON { event, data }',
+  );
+  console.log('Browser test page: http://localhost:3000/websocket-test.html');
   console.log('API Docs: http://localhost:3000/api/docs');
 }
 bootstrap();

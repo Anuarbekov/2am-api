@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { RawTelemetry } from './entities/raw-telemetry.entity';
 import { CleanupTask } from './tasks/cleanup.task';
 import { TelemetryGateway } from './gateways/telemetry.gateway';
@@ -9,13 +10,15 @@ import { SignalProcessingService } from './services/signal-processing.service';
 import { RawTelemetryService } from './services/raw-telemetry.service';
 import { TelemetryController } from './controllers/telemetry.controller';
 import { TelemetryModule } from './db/telementry.module';
+import { TelemetryReplayStreamService } from './services/telemetry-replay-stream.service';
+import { TelemetryRawWsService } from './services/telemetry-raw-ws.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -38,6 +41,8 @@ import { TelemetryModule } from './db/telementry.module';
     RawTelemetryService,
     SignalProcessingService,
     HealthIndexService,
+    TelemetryReplayStreamService,
+    TelemetryRawWsService,
     TelemetryGateway,
     CleanupTask,
   ],

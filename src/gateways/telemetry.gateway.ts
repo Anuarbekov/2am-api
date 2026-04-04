@@ -4,159 +4,56 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 import { RawTelemetryService } from '../services/raw-telemetry.service';
+import { HealthIndexService } from '../services/health-index.service';
 import {
-  HealthIndexService,
-  HealthResult,
-} from '../services/health-index.service';
-import { ProcessedTelemetry } from '../services/signal-processing.service';
-
-interface ClientInfo {
-  lastTimestamp: Date;
-  streamInterval?: NodeJS.Timeout;
-}
-
-interface TelemetryEvent {
-  type: 'current' | 'update';
-  data: ProcessedTelemetry;
-  health: HealthResult;
-  processed: boolean;
-  timestamp: Date;
-  processingInfo?: {
-    smoothed: boolean;
-    confidence: number;
-    quality: number;
-  };
-}
+  TelemetryReplayStreamService,
+  TELEMETRY_STREAM_MS,
+} from '../services/telemetry-replay-stream.service';
 
 @WebSocketGateway({
-  cors: { origin: '*' },
-  namespace: 'telemetry',
-  transports: ['websocket'],
+  cors: { origin: '*', credentials: false },
+  namespace: '/telemetry',
+  transports: ['polling', 'websocket'],
 })
 @Injectable()
 export class TelemetryGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server!: Server;
 
   private readonly logger = new Logger(TelemetryGateway.name);
-  private clients: Map<string, ClientInfo> = new Map();
-  private lastSentData: Map<string, ProcessedTelemetry> = new Map();
+  private readonly stopByClient = new Map<string, () => void>();
 
   constructor(
     private rawTelemetryService: RawTelemetryService,
     private healthIndexService: HealthIndexService,
+    private replayStream: TelemetryReplayStreamService,
   ) {}
+
+  afterInit(server: Server) {
+    this.logger.log('Socket.IO gateway initialized (namespace /telemetry)');
+  }
 
   async handleConnection(client: Socket): Promise<void> {
     this.logger.log(`Client connected: ${client.id}`);
-
-    const lastTimestamp =
-      (await this.rawTelemetryService.getLatestTimestamp()) || new Date();
-    this.clients.set(client.id, { lastTimestamp });
-
-    await this.sendLatestProcessedData(client);
-    this.startProcessedStream(client);
+    const stop = await this.replayStream.start(
+      (event, data) => client.emit(event, data),
+      TELEMETRY_STREAM_MS,
+      client.id,
+    );
+    this.stopByClient.set(client.id, stop);
   }
 
   handleDisconnect(client: Socket): void {
     this.logger.log(`Client disconnected: ${client.id}`);
-    const clientData = this.clients.get(client.id);
-    if (clientData?.streamInterval) {
-      clearInterval(clientData.streamInterval);
-    }
-    this.clients.delete(client.id);
-    this.lastSentData.delete(client.id);
-  }
-
-  private async sendLatestProcessedData(client: Socket): Promise<void> {
-    const latest = await this.rawTelemetryService.getProcessedTelemetry(
-      new Date(Date.now() - 10000),
-      1,
-    );
-
-    if (latest.length > 0) {
-      const health = this.healthIndexService.computeHealthFromProcessed(
-        latest[0],
-      );
-      const event: TelemetryEvent = {
-        type: 'current',
-        data: latest[0],
-        health,
-        processed: true,
-        timestamp: new Date(),
-      };
-      client.emit('telemetry', event);
-      this.lastSentData.set(client.id, latest[0]);
-    }
-  }
-
-  private startProcessedStream(client: Socket): void {
-    let lastTimestamp =
-      this.clients.get(client.id)?.lastTimestamp || new Date();
-    let consecutiveErrors = 0;
-
-    const interval = setInterval(async () => {
-      try {
-        const checkTime = new Date(lastTimestamp.getTime() - 1000);
-        const newData = await this.rawTelemetryService.getProcessedTelemetry(
-          checkTime,
-          50,
-        );
-
-        if (newData.length > 0) {
-          for (const data of newData) {
-            const lastData = this.lastSentData.get(client.id);
-            if (
-              lastData &&
-              lastData.timestamp.getTime() === data.timestamp.getTime()
-            ) {
-              continue;
-            }
-
-            const health =
-              this.healthIndexService.computeHealthFromProcessed(data);
-            const event: TelemetryEvent = {
-              type: 'update',
-              data,
-              health,
-              processed: true,
-              timestamp: new Date(),
-              processingInfo: {
-                smoothed: true,
-                confidence: data.confidence,
-                quality: data.quality,
-              },
-            };
-
-            client.emit('telemetry', event);
-            this.lastSentData.set(client.id, data);
-            lastTimestamp = data.timestamp;
-          }
-          consecutiveErrors = 0;
-        } else {
-          client.emit('ping', { timestamp: new Date() });
-        }
-      } catch (error) {
-        consecutiveErrors++;
-        this.logger.error(`Stream error for client ${client.id}:`, error);
-
-        if (consecutiveErrors > 5) {
-          client.emit('error', { message: 'Stream processing failed' });
-        }
-      }
-    }, 1000);
-
-    const clientData = this.clients.get(client.id);
-    if (clientData) {
-      clientData.streamInterval = interval;
-      this.clients.set(client.id, clientData);
-    }
+    this.stopByClient.get(client.id)?.();
+    this.stopByClient.delete(client.id);
   }
 
   @SubscribeMessage('requestHistory')
