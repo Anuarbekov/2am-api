@@ -10,10 +10,8 @@ import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 import { RawTelemetryService } from '../services/raw-telemetry.service';
 import { HealthIndexService } from '../services/health-index.service';
-import {
-  TelemetryReplayStreamService,
-  TELEMETRY_STREAM_MS,
-} from '../services/telemetry-replay-stream.service';
+import { TelemetryReplayStreamService } from '../services/telemetry-replay-stream.service';
+import { TELEMETRY_STREAM_MS } from '../constants/telemetry-stream-ms';
 
 @WebSocketGateway({
   cors: { origin: '*', credentials: false },
@@ -44,7 +42,7 @@ export class TelemetryGateway
     this.logger.log(`Client connected: ${client.id}`);
     const stop = await this.replayStream.start(
       (event, data) => client.emit(event, data),
-      TELEMETRY_STREAM_MS,
+      1000,
       client.id,
     );
     this.stopByClient.set(client.id, stop);

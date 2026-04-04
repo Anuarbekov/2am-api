@@ -1,10 +1,8 @@
 import { Controller, Get, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { RawTelemetryService } from '../services/raw-telemetry.service';
-import {
-  HealthIndexService,
-  HealthResult,
-} from '../services/health-index.service';
+import { HealthIndexService } from '../services/health-index.service';
+import { HealthResult } from '../interfaces/health-result.interface';
 import { ProcessedTelemetry } from '../services/signal-processing.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 

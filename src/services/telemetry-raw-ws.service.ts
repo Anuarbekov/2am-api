@@ -10,8 +10,8 @@ import { Socket } from 'net';
 import { WebSocketServer, WebSocket } from 'ws';
 import {
   TelemetryReplayStreamService,
-  TELEMETRY_STREAM_MS,
 } from './telemetry-replay-stream.service';
+import { TELEMETRY_STREAM_MS } from '../constants/telemetry-stream-ms';
 
 const MAX_MINUTES = 10080; // 7 days
 
@@ -203,7 +203,7 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
 
     const stop = await this.replayStream.start(
       send,
-      TELEMETRY_STREAM_MS,
+      1000,
       id,
       range,
       historyOptions,

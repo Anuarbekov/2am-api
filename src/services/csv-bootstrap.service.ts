@@ -6,6 +6,6 @@ export class CsvBootstrapService implements OnModuleInit {
     constructor(private readonly csvService: CsvImportService) {}
 
     async onModuleInit() {
-        await this.csvService.importFromCsv('src/db/datasource/loco_telemetry.csv');
+        await this.csvService.importFromCsv('src/datasource/loco_telemetry.csv');
     }
 }

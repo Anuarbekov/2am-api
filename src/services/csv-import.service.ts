@@ -3,7 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RawTelemetry } from '../entities/raw-telemetry.entity';
 import { DeepPartial } from 'typeorm';
-import { CsvTelemetryRow } from './csv-row.interface';
+import { CsvTelemetryRow } from '../interfaces/csv-row.interface';
+import { toNumber } from "../utils/toNumber.util";
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -60,19 +61,12 @@ export class CsvImportService {
     private mapRow(data: CsvTelemetryRow): RawTelemetry {
         return this.repo.create({
             timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
-            temp: this.toNumber(data.temp),
-            pressure: this.toNumber(data.pressure),
-            fuel: this.toNumber(data.fuel),
-            speed: this.toNumber(data.speed),
-            brake: this.toNumber(data.brake),
-            engine: this.toNumber(data.engine),
+            temp: toNumber(data.temp),
+            pressure: toNumber(data.pressure),
+            fuel: toNumber(data.fuel),
+            speed: toNumber(data.speed),
+            brake: toNumber(data.brake),
+            engine: toNumber(data.engine),
         } as DeepPartial<RawTelemetry>);
-    }
-
-    private toNumber(value: any): number | null {
-        if (value === undefined || value === null || value === '') return null;
-
-        const n = Number(value);
-        return Number.isNaN(n) ? null : n;
     }
 }

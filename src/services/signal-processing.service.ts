@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RawTelemetry } from '../entities/raw-telemetry.entity';
+import {EMAState} from "../interfaces/ema-state.interface";
+import {ProcessedCacheEntry} from "../interfaces/processed-cache-entry.interface";
+import { emaAlpha } from '../constants/ema-alpha-coefficients'
+import {parameters} from "../constants/parameters";
+import {checks} from "../constants/params-validation-checks";
+import {ParametersTypes} from "../types/parameters.type";
 
 export interface ProcessedTelemetry {
   timestamp: Date;
@@ -13,52 +19,25 @@ export interface ProcessedTelemetry {
   confidence: number;
 }
 
-interface EMASate {
-  value: number;
-  lastUpdate: Date;
-}
-
-interface ProcessedCacheEntry {
-  timestamp: Date;
-  data: any;
-}
-
 @Injectable()
 export class SignalProcessingService {
   private readonly logger = new Logger(SignalProcessingService.name);
   private isolationMutex = Promise.resolve();
 
-  private emaState: Map<string, EMASate> = new Map();
+  private emaState: Map<string, EMAState> = new Map();
   private recentValues: Map<string, Array<{ value: number; timestamp: Date }>> =
     new Map();
   private lastProcessedCache: Map<string, ProcessedCacheEntry> = new Map();
 
-  private readonly emaAlpha = {
-    fuel: 0.3,
-    pressure: 0.2,
-    temp: 0.15,
-    speed: 0.25,
-    brake: 0.2,
-    engine: 0.2,
-  };
-
   private readonly medianWindow = 5000;
 
   constructor() {
-    const params = [
-      'fuel',
-      'pressure',
-      'temp',
-      'speed',
-      'brake',
-      'engine',
-    ] as const;
-    for (const param of params) {
+    for (const param of parameters) {
       this.recentValues.set(param, []);
     }
   }
 
-  async processRawData(rawData: RawTelemetry[]): Promise<ProcessedTelemetry[]> {
+  private createProcessedData = (rawData: RawTelemetry[]): ProcessedTelemetry[] => {
     const processed: ProcessedTelemetry[] = [];
 
     for (const raw of rawData) {
@@ -81,8 +60,15 @@ export class SignalProcessingService {
         engine: medianFiltered.engine ?? 0,
         confidence,
       };
+
       processed.push(processedItem);
     }
+
+    return processed;
+  };
+
+  async processRawData(rawData: RawTelemetry[]): Promise<ProcessedTelemetry[]> {
+    this.createProcessedData(rawData);
     return this.processRawDataSequential(rawData, false);
   }
 
@@ -106,38 +92,8 @@ export class SignalProcessingService {
     rawData: RawTelemetry[],
     isolated: boolean,
   ): ProcessedTelemetry[] {
-    const run = (): ProcessedTelemetry[] => {
-      const processed: ProcessedTelemetry[] = [];
-
-      for (const raw of rawData) {
-        const validated = this.validateAndRemoveOutliers(raw);
-
-        if (!validated) continue;
-
-        const smoothed = this.applyEMA(validated);
-        const medianFiltered = this.applyMedianFilter(smoothed);
-        const confidence = this.calculateConfidence(medianFiltered);
-
-        const processedItem: ProcessedTelemetry = {
-          timestamp: raw.timestamp,
-          fuel: medianFiltered.fuel ?? 0,
-          pressure: medianFiltered.pressure ?? 0,
-          temp: medianFiltered.temp ?? 0,
-          speed: medianFiltered.speed ?? 0,
-          quality: raw.quality,
-          brake: medianFiltered.brake ?? 0,
-          engine: medianFiltered.engine ?? 0,
-          confidence,
-        };
-
-        processed.push(processedItem);
-      }
-
-      return processed;
-    };
-
     if (!isolated) {
-      return run();
+      return this.createProcessedData(rawData);
     }
 
     const prevEma = this.emaState;
@@ -152,7 +108,7 @@ export class SignalProcessingService {
     this.lastProcessedCache = new Map();
 
     try {
-      return run();
+      return this.createProcessedData(rawData);
     } finally {
       this.emaState = prevEma;
       this.recentValues = prevRecent;
@@ -161,15 +117,6 @@ export class SignalProcessingService {
   }
 
   private validateAndRemoveOutliers(data: RawTelemetry): RawTelemetry | null {
-    const checks = [
-      { field: 'fuel' as const, min: 0, max: 1000 },
-      { field: 'pressure' as const, min: 0, max: 10 },
-      { field: 'temp' as const, min: -200, max: 2000 },
-      { field: 'speed' as const, min: 0, max: 120 },
-      { field: 'brake' as const, min: 0, max: 100 },
-      { field: 'engine' as const, min: 0, max: 100 },
-    ];
-
     for (const check of checks) {
       const value = data[check.field];
       if (
@@ -192,15 +139,7 @@ export class SignalProcessingService {
     const lastValue = this.getLastProcessedValue(current.timestamp);
     if (!lastValue) return false;
 
-    const params = [
-      'fuel',
-      'pressure',
-      'temp',
-      'speed',
-      'brake',
-      'engine',
-    ] as const;
-    for (const param of params) {
+    for (const param of parameters) {
       const currentVal = current[param];
       const lastVal = lastValue[param];
 
@@ -219,7 +158,7 @@ export class SignalProcessingService {
     const result = { ...current };
     const now = new Date();
 
-    for (const [param, alpha] of Object.entries(this.emaAlpha)) {
+    for (const [param, alpha] of Object.entries(emaAlpha)) {
       const currentValue = current[param as keyof RawTelemetry] as
         | number
         | null;
@@ -249,14 +188,7 @@ export class SignalProcessingService {
     return Math.min(0.5, baseAlpha * factor);
   }
 
-  private applyMedianFilter(data: RawTelemetry): {
-    fuel: number | null;
-    pressure: number | null;
-    temp: number | null;
-    speed: number | null;
-    brake: number | null;
-    engine: number | null;
-  } {
+  private applyMedianFilter(data: RawTelemetry): ParametersTypes {
     const result = {
       fuel: null as number | null,
       pressure: null as number | null,
@@ -269,14 +201,7 @@ export class SignalProcessingService {
     const now = data.timestamp;
     const windowStart = new Date(now.getTime() - this.medianWindow);
 
-    for (const param of [
-      'fuel',
-      'pressure',
-      'temp',
-      'speed',
-      'brake',
-      'engine',
-    ] as const) {
+    for (const param of parameters) {
       let value = data[param];
       if (value === null || value === undefined) continue;
 
@@ -303,28 +228,20 @@ export class SignalProcessingService {
     brake: number | null;
     engine: number | null;
   }): number {
-    const fields = [
-      'fuel',
-      'pressure',
-      'temp',
-      'speed',
-      'brake',
-      'engine',
-    ] as const;
     let present = 0;
     let reliabilitySum = 0;
 
-    for (const f of fields) {
-      const v = data[f];
+    for (const param of parameters) {
+      const v = data[param];
       if (v === null || v === undefined) continue;
       present++;
       let r = 1;
-      if (f === 'temp' && (v > 200 || v < -50)) r -= 0.25;
-      if (f === 'pressure' && v > 50) r -= 0.25;
-      if (f === 'fuel' && (v < 0 || v > 2000)) r -= 0.25;
-      if (f === 'speed' && (v < 0 || v > 200)) r -= 0.25;
-      if (f === 'brake' && (v < 0 || v > 100)) r -= 0.25;
-      if (f === 'engine' && (v < 0 || v > 100)) r -= 0.25;
+      if (param === 'temp' && (v > 200 || v < -50)) r -= 0.25;
+      if (param === 'pressure' && v > 50) r -= 0.25;
+      if (param === 'fuel' && (v < 0 || v > 2000)) r -= 0.25;
+      if (param === 'speed' && (v < 0 || v > 200)) r -= 0.25;
+      if (param === 'brake' && (v < 0 || v > 100)) r -= 0.25;
+      if (param === 'engine' && (v < 0 || v > 100)) r -= 0.25;
       reliabilitySum += Math.max(0, r);
     }
 
@@ -349,16 +266,8 @@ export class SignalProcessingService {
     if (!lastValue) return false;
 
     const threshold = 0.01;
-    const params = [
-      'fuel',
-      'pressure',
-      'temp',
-      'speed',
-      'brake',
-      'engine',
-    ] as const;
 
-    for (const param of params) {
+    for (const param of parameters) {
       const currentVal = current[param];
       const lastVal = lastValue[param];
 

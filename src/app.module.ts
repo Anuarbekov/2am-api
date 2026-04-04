@@ -9,7 +9,7 @@ import { HealthIndexService } from './services/health-index.service';
 import { SignalProcessingService } from './services/signal-processing.service';
 import { RawTelemetryService } from './services/raw-telemetry.service';
 import { TelemetryController } from './controllers/telemetry.controller';
-import { TelemetryModule } from './db/telementry.module';
+import { TelemetryModule } from './modules/telementry.module';
 import { TelemetryReplayStreamService } from './services/telemetry-replay-stream.service';
 import { TelemetryRawWsService } from './services/telemetry-raw-ws.service';
 

@@ -1,84 +1,15 @@
 import { Injectable } from '@nestjs/common';
-
-export interface ProcessedTelemetry {
-  fuel: number;
-  pressure: number;
-  temp: number;
-  speed: number;
-  brake: number;
-  engine: number;
-  confidence?: number;
-}
-
-export type TelemetryField =
-  | 'fuel'
-  | 'pressure'
-  | 'temp'
-  | 'speed'
-  | 'brake'
-  | 'engine';
-
-export interface ContextCondition {
-  field: TelemetryField;
-  op: 'lte' | 'lt' | 'gte' | 'gt' | 'eq';
-  value: number;
-}
-
-export interface MetricHealthConfig {
-  weight: number;
-  optimal: [number, number];
-  critical: [number, number];
-  contextualBands?: Array<{
-    when: ContextCondition[];
-    optimal: [number, number];
-    critical: [number, number];
-  }>;
-}
-
-export interface HealthConfig {
-  speed: MetricHealthConfig;
-  fuel: MetricHealthConfig;
-  pressure: MetricHealthConfig;
-  temp: MetricHealthConfig;
-  brake: MetricHealthConfig;
-  engine: MetricHealthConfig;
-}
-
-interface HealthFactor {
-  parameter: string;
-  impact: number;
-  status: string;
-  message: string;
-}
-
-export interface HealthResult {
-  index: number;
-  grade: string;
-  factors: HealthFactor[];
-  confidence: number;
-}
+import { ProcessedTelemetry} from "../interfaces/processed-telemetry.interface";
+import { ContextCondition } from "../interfaces/context-condition.interface";
+import { MetricHealthConfig } from "../interfaces/metric-health-config.interface";
+import { HealthConfig } from "../interfaces/health-config.interface";
+import { HealthFactor } from "../interfaces/health-factor.interface";
+import { HealthResult } from "../interfaces/health-result.interface";
+import { healthConfig } from "../constants/health-config";
 
 @Injectable()
 export class HealthIndexService {
-  private readonly config: HealthConfig = {
-    speed: { weight: 0.1, optimal: [0, 80], critical: [80.1, 120] },
-    fuel: { weight: 0.2, optimal: [100.1, 1000], critical: [0, 100] },
-    pressure: { weight: 0.15, optimal: [0, 8.9], critical: [9, 20] },
-    temp: {
-      weight: 0.15,
-      optimal: [75, 90],
-      critical: [90.1, 100],
-      contextualBands: [
-        {
-          when: [{ field: 'speed', op: 'lte', value: 1 }],
-          optimal: [0, 100],
-          critical: [100.1, 120],
-        },
-      ],
-    },
-    brake: { weight: 0.2, optimal: [65.1, 100], critical: [0, 65] },
-    engine: { weight: 0.2, optimal: [65.1, 100], critical: [0, 65] },
-  };
+  private readonly config: HealthConfig = healthConfig;
 
   computeHealthFromProcessed(data: ProcessedTelemetry): HealthResult {
     let totalScore = 0;

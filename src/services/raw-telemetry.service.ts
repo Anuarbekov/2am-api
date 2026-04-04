@@ -6,6 +6,7 @@ import {
   SignalProcessingService,
   ProcessedTelemetry,
 } from './signal-processing.service';
+import {parameters} from "../constants/parameters";
 
 @Injectable()
 export class RawTelemetryService {
@@ -70,14 +71,7 @@ export class RawTelemetryService {
     const smoothed = JSON.parse(JSON.stringify(data));
 
     for (let i = 2; i < data.length - 2; i++) {
-      for (const param of [
-        'fuel',
-        'pressure',
-        'temp',
-        'speed',
-        'brake',
-        'engine',
-      ] as const) {
+      for (const param of parameters) {
         const values: number[] = [];
         for (let j = -2; j <= 2; j++) {
           values.push(data[i + j][param]);

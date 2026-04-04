@@ -1,12 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RawTelemetryService } from './raw-telemetry.service';
-import {
-  HealthIndexService,
-  HealthResult,
-} from './health-index.service';
+import { HealthIndexService} from './health-index.service';
+import { HealthResult } from '../interfaces/health-result.interface';
 import { ProcessedTelemetry } from './signal-processing.service';
-
-export const TELEMETRY_STREAM_MS = 1500;
+import { TELEMETRY_STREAM_MS } from '../constants/telemetry-stream-ms'
 
 export interface TelemetryStreamEvent {
   type: 'current' | 'update';

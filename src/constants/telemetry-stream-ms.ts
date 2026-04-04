@@ -1,0 +1,1 @@
+export const TELEMETRY_STREAM_MS = 2000;
