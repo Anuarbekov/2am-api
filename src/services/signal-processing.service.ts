@@ -66,7 +66,6 @@ export class SignalProcessingService {
         quality: raw.quality,
         confidence,
       };
-
       processed.push(processedItem);
     }
 
@@ -189,27 +188,38 @@ export class SignalProcessingService {
     return result;
   }
 
+  /**
+   * Confidence from sensor coverage and per-channel plausibility.
+   * Do not mix unrelated units (fuel ~1000 L vs speed ~0) into one CV — that always collapses to ~0.
+   */
   private calculateConfidence(data: {
     fuel: number | null;
     pressure: number | null;
     temp: number | null;
     speed: number | null;
   }): number {
-    const values = [data.fuel, data.pressure, data.temp, data.speed].filter(
-      (v): v is number => v !== null && v !== undefined,
-    );
+    const fields = ['fuel', 'pressure', 'temp', 'speed'] as const;
+    let present = 0;
+    let reliabilitySum = 0;
 
-    if (values.length === 0) return 0;
+    for (const f of fields) {
+      const v = data[f];
+      if (v === null || v === undefined) continue;
+      present++;
+      let r = 1;
+      if (f === 'temp' && (v > 200 || v < -50)) r -= 0.25;
+      if (f === 'pressure' && v > 50) r -= 0.25;
+      if (f === 'fuel' && (v < 0 || v > 2000)) r -= 0.25;
+      if (f === 'speed' && (v < 0 || v > 200)) r -= 0.25;
+      reliabilitySum += Math.max(0, r);
+    }
 
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    if (mean === 0) return 1;
+    if (present === 0) return 0;
 
-    const variance =
-      values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
-    const stdDev = Math.sqrt(variance);
-    const cv = stdDev / mean;
+    const availabilityScore = present / 4;
+    const reliabilityScore = reliabilitySum / present;
 
-    return Math.max(0, Math.min(1, 1 - cv));
+    return Math.max(0, Math.min(1, availabilityScore * reliabilityScore));
   }
 
   private isDuplicate(
