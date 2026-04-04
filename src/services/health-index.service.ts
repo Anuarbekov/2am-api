@@ -31,6 +31,7 @@ interface HealthFactor {
   parameter: string;
   impact: number;
   status: string;
+  message: string;
 }
 
 export interface HealthResult {
@@ -101,6 +102,54 @@ function scoreInBand(
   return 1;
 }
 
+function buildFactorMessage(
+  parameter: string,
+  value: number,
+  optimal: [number, number],
+  status: string,
+): string {
+  if (status === 'normal') {
+    switch (parameter) {
+      case 'temp':
+        return 'Temperature is within a healthy range.';
+      case 'pressure':
+        return 'Pressure is within a healthy range.';
+      case 'fuel':
+        return 'Fuel level is adequate.';
+      case 'speed':
+        return 'Speed is within a safe range.';
+      default:
+        return 'Operating within normal range.';
+    }
+  }
+
+  const [optLo, optHi] = optimal;
+  const high = value > optHi;
+  const low = value < optLo;
+
+  switch (parameter) {
+    case 'temp':
+      if (high) return 'Temperature is high, try to slow down.';
+      if (low)
+        return 'Temperature is low; allow the engine to reach operating temperature.';
+      break;
+    case 'pressure':
+      if (high) return 'Pressure is too high, try not to gas.';
+      if (low) return 'Pressure is low; check the system.';
+      break;
+    case 'fuel':
+      if (low) return 'Fuel level is low; refuel when possible.';
+      if (high) return 'Fuel reserve is high.';
+      break;
+    case 'speed':
+      if (high) return 'Speed is high; reduce to a safer pace.';
+      if (low) return 'Speed is low; adjust if conditions require more pace.';
+      break;
+  }
+
+  return `${parameter} needs attention.`;
+}
+
 @Injectable()
 export class HealthIndexService {
   private readonly config: HealthConfig = {
@@ -141,6 +190,7 @@ export class HealthIndexService {
         parameter: param,
         impact: Math.round(contribution * 100),
         status,
+        message: buildFactorMessage(param, value, optimal, status),
       });
     }
     const confidenceFactor = data.confidence ?? 0.8;
