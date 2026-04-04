@@ -11,7 +11,7 @@ export class RawTelemetry {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamptz' })
   @Index()
   timestamp!: Date;
 

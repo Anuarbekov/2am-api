@@ -76,10 +76,10 @@ export class SignalProcessingService {
 
   private validateAndRemoveOutliers(data: RawTelemetry): RawTelemetry | null {
     const checks = [
-      { field: 'fuel' as const, min: 0, max: 100 },
+      { field: 'fuel' as const, min: 0, max: 1000 },
       { field: 'pressure' as const, min: 0, max: 10 },
-      { field: 'temp' as const, min: -50, max: 150 },
-      { field: 'speed' as const, min: 0, max: 200 },
+      { field: 'temp' as const, min: -200, max: 2000 },
+      { field: 'speed' as const, min: 0, max: 120 },
     ];
 
     for (const check of checks) {
