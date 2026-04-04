@@ -82,6 +82,7 @@ export class SignalProcessingService {
         confidence,
       };
       processed.push(processedItem);
+    }
     return this.processRawDataSequential(rawData, false);
   }
 
@@ -124,6 +125,8 @@ export class SignalProcessingService {
           temp: medianFiltered.temp ?? 0,
           speed: medianFiltered.speed ?? 0,
           quality: raw.quality,
+          brake: medianFiltered.brake ?? 0,
+          engine: medianFiltered.engine ?? 0,
           confidence,
         };
 
