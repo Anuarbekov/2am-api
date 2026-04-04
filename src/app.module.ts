@@ -1,8 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UsersModule } from './users/users.module';
-import { AuthModule } from './auth/auth.module';
+import { RawTelemetry } from './entities/raw-telemetry.entity';
+import { CleanupTask } from './tasks/cleanup.task';
+import { TelemetryGateway } from './gateways/telemetry.gateway';
+import { HealthIndexService } from './services/health-index.service';
+import { SignalProcessingService } from './services/signal-processing.service';
+import { RawTelemetryService } from './services/raw-telemetry.service';
+import { TelemetryController } from './controllers/telemetry.controller';
 
 @Module({
   imports: [
@@ -23,9 +28,15 @@ import { AuthModule } from './auth/auth.module';
         synchronize: true, // dev only
       }),
     }),
-
-    UsersModule,
-    AuthModule,
+    TypeOrmModule.forFeature([RawTelemetry]),
+  ],
+  controllers: [TelemetryController],
+  providers: [
+    RawTelemetryService,
+    SignalProcessingService,
+    HealthIndexService,
+    TelemetryGateway,
+    CleanupTask,
   ],
 })
 export class AppModule {}
