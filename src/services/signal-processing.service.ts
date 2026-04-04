@@ -8,6 +8,8 @@ export interface ProcessedTelemetry {
   temp: number;
   speed: number;
   quality: number;
+  brake: number;
+  engine: number;
   confidence: number;
 }
 
@@ -34,12 +36,21 @@ export class SignalProcessingService {
     pressure: 0.2,
     temp: 0.15,
     speed: 0.25,
+    brake: 0.2,
+    engine: 0.2,
   };
 
   private readonly medianWindow = 5000;
 
   constructor() {
-    const params = ['fuel', 'pressure', 'temp', 'speed'];
+    const params = [
+      'fuel',
+      'pressure',
+      'temp',
+      'speed',
+      'brake',
+      'engine',
+    ] as const;
     for (const param of params) {
       this.recentValues.set(param, []);
     }
@@ -64,6 +75,8 @@ export class SignalProcessingService {
         temp: medianFiltered.temp ?? 0,
         speed: medianFiltered.speed ?? 0,
         quality: raw.quality,
+        brake: medianFiltered.brake ?? 0,
+        engine: medianFiltered.engine ?? 0,
         confidence,
       };
       processed.push(processedItem);
@@ -78,6 +91,8 @@ export class SignalProcessingService {
       { field: 'pressure' as const, min: 0, max: 10 },
       { field: 'temp' as const, min: -200, max: 2000 },
       { field: 'speed' as const, min: 0, max: 120 },
+      { field: 'brake' as const, min: 0, max: 100 },
+      { field: 'engine' as const, min: 0, max: 100 },
     ];
 
     for (const check of checks) {
@@ -102,7 +117,14 @@ export class SignalProcessingService {
     const lastValue = this.getLastProcessedValue(current.timestamp);
     if (!lastValue) return false;
 
-    const params = ['fuel', 'pressure', 'temp', 'speed'] as const;
+    const params = [
+      'fuel',
+      'pressure',
+      'temp',
+      'speed',
+      'brake',
+      'engine',
+    ] as const;
     for (const param of params) {
       const currentVal = current[param];
       const lastVal = lastValue[param];
@@ -157,18 +179,29 @@ export class SignalProcessingService {
     pressure: number | null;
     temp: number | null;
     speed: number | null;
+    brake: number | null;
+    engine: number | null;
   } {
     const result = {
       fuel: null as number | null,
       pressure: null as number | null,
       temp: null as number | null,
       speed: null as number | null,
+      brake: null as number | null,
+      engine: null as number | null,
     };
 
     const now = data.timestamp;
     const windowStart = new Date(now.getTime() - this.medianWindow);
 
-    for (const param of ['fuel', 'pressure', 'temp', 'speed'] as const) {
+    for (const param of [
+      'fuel',
+      'pressure',
+      'temp',
+      'speed',
+      'brake',
+      'engine',
+    ] as const) {
       let value = data[param];
       if (value === null || value === undefined) continue;
 
@@ -187,18 +220,22 @@ export class SignalProcessingService {
 
     return result;
   }
-
-  /**
-   * Confidence from sensor coverage and per-channel plausibility.
-   * Do not mix unrelated units (fuel ~1000 L vs speed ~0) into one CV — that always collapses to ~0.
-   */
   private calculateConfidence(data: {
     fuel: number | null;
     pressure: number | null;
     temp: number | null;
     speed: number | null;
+    brake: number | null;
+    engine: number | null;
   }): number {
-    const fields = ['fuel', 'pressure', 'temp', 'speed'] as const;
+    const fields = [
+      'fuel',
+      'pressure',
+      'temp',
+      'speed',
+      'brake',
+      'engine',
+    ] as const;
     let present = 0;
     let reliabilitySum = 0;
 
@@ -211,6 +248,8 @@ export class SignalProcessingService {
       if (f === 'pressure' && v > 50) r -= 0.25;
       if (f === 'fuel' && (v < 0 || v > 2000)) r -= 0.25;
       if (f === 'speed' && (v < 0 || v > 200)) r -= 0.25;
+      if (f === 'brake' && (v < 0 || v > 100)) r -= 0.25;
+      if (f === 'engine' && (v < 0 || v > 100)) r -= 0.25;
       reliabilitySum += Math.max(0, r);
     }
 
@@ -235,7 +274,14 @@ export class SignalProcessingService {
     if (!lastValue) return false;
 
     const threshold = 0.01;
-    const params = ['fuel', 'pressure', 'temp', 'speed'] as const;
+    const params = [
+      'fuel',
+      'pressure',
+      'temp',
+      'speed',
+      'brake',
+      'engine',
+    ] as const;
 
     for (const param of params) {
       const currentVal = current[param];

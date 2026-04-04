@@ -33,6 +33,12 @@ export class RawTelemetry {
   @Column({ type: 'boolean', default: false })
   is_outlier!: boolean;
 
+  @Column({ type: 'float', default: 100 })
+  engine!: number;
+
+  @Column({ type: 'float', default: 100 })
+  brake!: number;
+
   @CreateDateColumn()
   created_at!: Date;
 }

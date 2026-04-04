@@ -4,4 +4,6 @@ export interface CsvTelemetryRow {
     pressure: number;
     fuel: number;
     speed: number;
+    brake: number;
+    engine: number;
 }
