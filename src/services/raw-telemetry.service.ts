@@ -89,4 +89,24 @@ export class RawTelemetryService {
     });
     return latest?.timestamp || null;
   }
+
+  async getLatestProcessed(): Promise<ProcessedTelemetry | null> {
+    const latestRaw = await this.rawRepository.findOne({
+      where: { quality: MoreThanOrEqual(50) },
+      order: { timestamp: 'DESC' }
+    });
+    if (!latestRaw) return null;
+
+    const processed = await this.signalProcessing.processRawData([latestRaw]);
+
+    if (processed.length > 0) {
+      this.signalProcessing.setLastProcessedValue(
+        processed[processed.length - 1].timestamp,
+        processed[processed.length - 1],
+      );
+      return processed[0];
+    }
+
+    return null;
+  }
 }

@@ -50,13 +50,12 @@ export class SignalProcessingService {
 
     for (const raw of rawData) {
       const validated = this.validateAndRemoveOutliers(raw);
+
       if (!validated) continue;
 
       const smoothed = this.applyEMA(validated);
       const medianFiltered = this.applyMedianFilter(smoothed);
       const confidence = this.calculateConfidence(medianFiltered);
-
-      if (this.isDuplicate(medianFiltered, raw.timestamp)) continue;
 
       const processedItem: ProcessedTelemetry = {
         timestamp: raw.timestamp,

@@ -25,16 +25,12 @@ export class TelemetryController {
   async getLatest(): Promise<
     { data: ProcessedTelemetry; health: HealthResult } | { error: string }
   > {
-    const data = await this.rawTelemetryService.getProcessedTelemetry(
-      new Date(Date.now() - 10000),
-      1,
-    );
-    
-    if (data.length === 0) {
+    const data = await this.rawTelemetryService.getLatestProcessed();
+    if (!data) {
       return { error: 'No data found' };
     }
-    const health = this.healthIndexService.computeHealthFromProcessed(data[0]);
-    return { data: data[0], health };
+    const health = this.healthIndexService.computeHealthFromProcessed(data);
+    return { data, health };
   }
 
   @Get('history')
