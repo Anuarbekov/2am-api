@@ -1,6 +1,5 @@
 export interface HealthFactor {
-    parameter: string;
-    impact: number;
-    status: string;
-    message: string;
+  parameter: string;
+  status: string;
+  message: string;
 }

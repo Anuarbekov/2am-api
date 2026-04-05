@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ProcessedTelemetry} from "../interfaces/processed-telemetry.interface";
-import { ContextCondition } from "../interfaces/context-condition.interface";
-import { MetricHealthConfig } from "../interfaces/metric-health-config.interface";
-import { HealthConfig } from "../interfaces/health-config.interface";
-import { HealthFactor } from "../interfaces/health-factor.interface";
-import { HealthResult } from "../interfaces/health-result.interface";
-import { healthConfig } from "../constants/health-config";
+import { ProcessedTelemetry } from '../interfaces/processed-telemetry.interface';
+import { ContextCondition } from '../interfaces/context-condition.interface';
+import { MetricHealthConfig } from '../interfaces/metric-health-config.interface';
+import { HealthConfig } from '../interfaces/health-config.interface';
+import { HealthFactor } from '../interfaces/health-factor.interface';
+import { HealthResult } from '../interfaces/health-result.interface';
+import { healthConfig } from '../constants/health-config';
 
 @Injectable()
 export class HealthIndexService {
@@ -49,7 +49,7 @@ export class HealthIndexService {
     return {
       score,
       grade: this.calculateGrade(score),
-      factors: factors,
+      factors,
     };
   }
 
