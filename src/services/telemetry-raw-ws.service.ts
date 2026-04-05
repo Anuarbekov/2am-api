@@ -203,7 +203,7 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
 
     const stop = await this.replayStream.start(
       send,
-      1000,
+      TELEMETRY_STREAM_MS,
       id,
       range,
       historyOptions,

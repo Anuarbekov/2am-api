@@ -1,5 +1,9 @@
 import { HealthResult } from './health-result.interface';
 import { ProcessedTelemetry } from '../services/signal-processing.service';
+import {
+  roundHealthForClient,
+  roundTelemetryNumber,
+} from '../utils/telemetry-client-display';
 
 export interface TelemetryResponse {
   timestamp: Date;
@@ -21,13 +25,13 @@ export function toTelemetryResponse(
   return {
     timestamp: data.timestamp,
     effective: {
-      temp: data.temp,
-      pressure: data.pressure,
-      fuel: data.fuel,
-      speed: data.speed,
-      engine: data.engine,
-      brake: data.brake,
+      temp: roundTelemetryNumber(data.temp),
+      pressure: roundTelemetryNumber(data.pressure),
+      fuel: roundTelemetryNumber(data.fuel),
+      speed: roundTelemetryNumber(data.speed),
+      engine: roundTelemetryNumber(data.engine),
+      brake: roundTelemetryNumber(data.brake),
     },
-    healthIndex: health,
+    healthIndex: roundHealthForClient(health),
   };
 }
