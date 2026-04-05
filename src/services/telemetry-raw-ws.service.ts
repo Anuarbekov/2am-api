@@ -8,14 +8,12 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { IncomingMessage, Server as HttpServer } from 'http';
 import { Socket } from 'net';
 import { WebSocketServer, WebSocket } from 'ws';
-import {
-  TelemetryReplayStreamService,
-} from './telemetry-replay-stream.service';
-import { TELEMETRY_STREAM_MS } from '../constants/telemetry-stream-ms';
+import { TelemetryReplayStreamService } from './telemetry-replay-stream.service';
 
-const MAX_MINUTES = 10080; // 7 days
+const MAX_REPLAY_SECONDS = 900;
+const REPLAY_BATCH_INTERVAL_MS = 60_000;
 
-type RawWsMode = 'default' | 'history' | 'replayMinutes';
+type RawWsMode = 'default' | 'history' | 'replaySeconds';
 
 @Injectable()
 export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
@@ -68,7 +66,7 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
     httpServer.on('upgrade', this.upgradeHandler);
 
     this.logger.log(
-      'Raw WebSocket: /ws/telemetry[?from=&to=], /ws/telemetry/history?from=&to=, /ws/telemetry/requestReplay?minutes=',
+      'Raw WebSocket: /ws/telemetry[?from=&to=], /ws/telemetry/history?from=&to=, /ws/telemetry/requestReplay?seconds= (max 900, batches every 1 min)',
     );
   }
 
@@ -87,7 +85,7 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
     const host = req.headers.host ?? '127.0.0.1';
     const pathname = new URL(req.url || '/', `http://${host}`).pathname;
     if (pathname === '/ws/telemetry/history') return 'history';
-    if (pathname === '/ws/telemetry/requestReplay') return 'replayMinutes';
+    if (pathname === '/ws/telemetry/requestReplay') return 'replaySeconds';
     return 'default';
   }
 
@@ -114,7 +112,7 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
     return { from, to };
   }
 
-  private parseMinutes(req: IncomingMessage): number | null | 'invalid' {
+  private parseSeconds(req: IncomingMessage): number | null | 'invalid' {
     const host = req.headers.host ?? '127.0.0.1';
     let real: URL;
     try {
@@ -122,7 +120,7 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
     } catch {
       return 'invalid';
     }
-    const raw = real.searchParams.get('minutes');
+    const raw = real.searchParams.get('seconds');
     if (raw === null || raw === '') {
       return null;
     }
@@ -130,7 +128,7 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
     if (!Number.isFinite(n) || n <= 0) {
       return 'invalid';
     }
-    return Math.min(Math.floor(n), MAX_MINUTES);
+    return Math.min(Math.floor(n), MAX_REPLAY_SECONDS);
   }
 
   private async handleConnection(ws: WebSocket, req: IncomingMessage) {
@@ -166,25 +164,25 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       range = parsed;
-    } else if (mode === 'replayMinutes') {
-      const minutes = this.parseMinutes(req);
-      if (minutes === null) {
+    } else if (mode === 'replaySeconds') {
+      const seconds = this.parseSeconds(req);
+      if (seconds === null) {
         send('error', {
           message:
-            'Required: ?minutes=N (positive number, max ' +
-            MAX_MINUTES +
-            ') e.g. ?minutes=60',
+            'Required: ?seconds=N (1–' +
+            MAX_REPLAY_SECONDS +
+            ') e.g. ?seconds=60',
         });
         ws.close();
         return;
       }
-      if (minutes === 'invalid') {
-        send('error', { message: 'Invalid minutes — use a positive number' });
+      if (seconds === 'invalid') {
+        send('error', { message: 'Invalid seconds — use a positive number' });
         ws.close();
         return;
       }
       const to = new Date();
-      const from = new Date(to.getTime() - minutes * 60 * 1000);
+      const from = new Date(to.getTime() - seconds * 1000);
       range = { from, to };
       historyOptions = { smooth: true };
     } else {
@@ -201,13 +199,22 @@ export class TelemetryRawWsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const stop = await this.replayStream.start(
-      send,
-      1000,
-      id,
-      range,
-      historyOptions,
-    );
+    const stop =
+      mode === 'replaySeconds' && range
+        ? await this.replayStream.startBatchedByMinute(
+            send,
+            REPLAY_BATCH_INTERVAL_MS,
+            id,
+            range,
+            historyOptions,
+          )
+        : await this.replayStream.start(
+            send,
+            1000,
+            id,
+            range,
+            historyOptions,
+          );
 
     const dispose = () => {
       stop();
