@@ -12,6 +12,10 @@ import { RawTelemetryService } from '../services/raw-telemetry.service';
 import { HealthIndexService } from '../services/health-index.service';
 import { TelemetryReplayStreamService } from '../services/telemetry-replay-stream.service';
 import { TELEMETRY_STREAM_MS } from '../constants/telemetry-stream-ms';
+import {
+  roundHealthForClient,
+  roundProcessedTelemetryForClient,
+} from '../utils/telemetry-client-display';
 
 @WebSocketGateway({
   cors: { origin: '*', credentials: false },
@@ -71,10 +75,13 @@ export class TelemetryGateway
       },
     );
 
-    const historyWithHealth = history.map((data) => ({
-      ...data,
-      health: this.healthIndexService.computeHealthFromProcessed(data),
-    }));
+    const historyWithHealth = history.map((data) => {
+      const health = this.healthIndexService.computeHealthFromProcessed(data);
+      return {
+        ...roundProcessedTelemetryForClient(data),
+        health: roundHealthForClient(health),
+      };
+    });
 
     client.emit('history', {
       from,
@@ -94,10 +101,13 @@ export class TelemetryGateway
 
     const replay = await this.rawTelemetryService.getProcessedHistory(from, to);
 
-    const replayWithHealth = replay.map((data) => ({
-      ...data,
-      health: this.healthIndexService.computeHealthFromProcessed(data),
-    }));
+    const replayWithHealth = replay.map((data) => {
+      const health = this.healthIndexService.computeHealthFromProcessed(data);
+      return {
+        ...roundProcessedTelemetryForClient(data),
+        health: roundHealthForClient(health),
+      };
+    });
 
     client.emit('replay', {
       from,
