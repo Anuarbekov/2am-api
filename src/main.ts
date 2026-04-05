@@ -30,7 +30,7 @@ async function bootstrap() {
     'Socket.IO: namespace /telemetry (Postman “Socket.IO”, or socket.io-client)',
   );
   console.log(
-    'Raw WebSocket: /ws/telemetry[?from=&to=], /ws/telemetry/history?from=&to=, /ws/telemetry/requestReplay?minutes= — JSON { event, data }',
+    'Raw WebSocket: /ws/telemetry[?from=&to=], /ws/telemetry/history?from=&to=, /ws/telemetry/requestReplay?seconds= (1–900, 1 min between batches) — JSON { event, data }',
   );
   console.log('Browser test page: http://localhost:3000/websocket-test.html');
   console.log('API Docs: http://localhost:3000/api/docs');
