@@ -261,17 +261,21 @@
       }
 
       function renderTelemetry(payload) {
-        const d = payload.data || {};
+        console.log(payload);
+        const d = payload.effective || payload.data || {};
+        const ts = payload.timestamp != null ? payload.timestamp : d.timestamp;
         emptyState.style.display = 'none';
         metricsEl.style.display = 'grid';
         healthBox.style.display = 'block';
 
         metricsEl.innerHTML = [
-          ['Time', d.timestamp ? new Date(d.timestamp).toLocaleString() : '—'],
+          ['Time', ts ? new Date(ts).toLocaleString() : '—'],
           ['Fuel', fmt(d.fuel)],
           ['Pressure', fmt(d.pressure)],
           ['Temp', fmt(d.temp)],
           ['Speed', fmt(d.speed)],
+          ['Engine', fmt(d.engine)],
+          ['Brake', fmt(d.brake)],
           ['Quality', d.quality != null ? String(d.quality) : '—'],
           ['Confidence', fmt(d.confidence)],
         ]
@@ -285,7 +289,8 @@
           )
           .join('');
 
-        healthJson.textContent = JSON.stringify(payload.health || {}, null, 2);
+        const health = payload.healthIndex || payload.health || {};
+        healthJson.textContent = JSON.stringify(health, null, 2);
       }
 
       const socketOpts = {
@@ -310,7 +315,7 @@
       });
 
       socket.on('telemetry', (p) => {
-        logLine('telemetry #' + (p.data && p.type ? p.type : 'update'));
+        logLine('telemetry');
         renderTelemetry(p);
       });
 

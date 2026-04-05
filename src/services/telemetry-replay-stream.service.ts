@@ -1,22 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RawTelemetryService } from './raw-telemetry.service';
 import { HealthIndexService} from './health-index.service';
-import { HealthResult } from '../interfaces/health-result.interface';
+import {
+  TelemetryResponse,
+  toTelemetryResponse,
+} from '../interfaces/telemetry-response.interface';
 import { ProcessedTelemetry } from './signal-processing.service';
-import { TELEMETRY_STREAM_MS } from '../constants/telemetry-stream-ms'
-
-export interface TelemetryStreamEvent {
-  type: 'current' | 'update';
-  data: ProcessedTelemetry;
-  health: HealthResult;
-  processed: boolean;
-  timestamp: Date;
-  processingInfo?: {
-    smoothed: boolean;
-    confidence: number;
-    quality: number;
-  };
-}
 
 export type TelemetryEmitFn = (event: string, data: unknown) => void;
 
@@ -87,19 +76,7 @@ export class TelemetryReplayStreamService {
       try {
         const data = allData[dataIndex];
         const health = this.healthIndexService.computeHealthFromProcessed(data);
-
-        const payload: TelemetryStreamEvent = {
-          type: dataIndex === 0 ? 'current' : 'update',
-          data,
-          health,
-          processed: true,
-          timestamp: new Date(),
-          processingInfo: {
-            smoothed: true,
-            confidence: data.confidence,
-            quality: data.quality,
-          },
-        };
+        const payload: TelemetryResponse = toTelemetryResponse(data, health);
 
         emit('telemetry', payload);
         emit('stream-progress', {

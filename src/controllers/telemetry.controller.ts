@@ -3,20 +3,12 @@ import type { Response } from 'express';
 import { RawTelemetryService } from '../services/raw-telemetry.service';
 import { HealthIndexService } from '../services/health-index.service';
 import { HealthResult } from '../interfaces/health-result.interface';
+import {
+  TelemetryResponse,
+  toTelemetryResponse,
+} from '../interfaces/telemetry-response.interface';
 import { ProcessedTelemetry } from '../services/signal-processing.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
-interface TelemetryResponse {
-  timestamp: Date;
-  effective: {
-    temp: number;
-    pressure: number;
-    fuel: number;
-    speed: number;
-    engine: number;
-    brake: number;
-  };
-  healthIndex: HealthResult;
-}
 
 @ApiTags('telemetry')
 @Controller('api/telemetry')
@@ -38,18 +30,7 @@ export class TelemetryController {
       return null;
     }
     const health = this.healthIndexService.computeHealthFromProcessed(data);
-    return {
-      timestamp: data.timestamp,
-      effective: {
-        temp: data.temp,
-        pressure: data.pressure,
-        fuel: data.fuel,
-        speed: data.speed,
-        engine: data.engine,
-        brake: data.brake,
-      },
-      healthIndex: health,
-    };
+    return toTelemetryResponse(data, health);
   }
 
   @Get('history')
