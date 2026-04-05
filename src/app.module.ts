@@ -12,6 +12,7 @@ import { TelemetryController } from './controllers/telemetry.controller';
 import { TelemetryModule } from './modules/telementry.module';
 import { TelemetryReplayStreamService } from './services/telemetry-replay-stream.service';
 import { TelemetryRawWsService } from './services/telemetry-raw-ws.service';
+import { TelemetryWsDocsController } from './controllers/telemetry-ws.docs.controller';
 
 @Module({
   imports: [
@@ -36,7 +37,7 @@ import { TelemetryRawWsService } from './services/telemetry-raw-ws.service';
     TypeOrmModule.forFeature([RawTelemetry]),
     TelemetryModule,
   ],
-  controllers: [TelemetryController],
+  controllers: [TelemetryController, TelemetryWsDocsController],
   providers: [
     RawTelemetryService,
     SignalProcessingService,
