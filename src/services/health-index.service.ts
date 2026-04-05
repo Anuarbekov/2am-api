@@ -129,14 +129,14 @@ export class HealthIndexService {
   ): string {
     if (status === 'normal') {
       const normalMessages: Record<string, string> = {
-        temp: 'Temperature is within a healthy range.',
-        pressure: 'Pressure is within a healthy range.',
-        fuel: 'Fuel level is adequate.',
-        speed: 'Speed is within a safe range.',
-        brake: 'Brake condition is good.',
-        engine: 'Engine condition is good.',
+        temp: 'Температура находится в пределах нормы.',
+        pressure: 'Давление находится в пределах нормы.',
+        fuel: 'Уровень топлива достаточный.',
+        speed: 'Скорость находится в пределах безопасного диапазона.',
+        brake: 'Состояние тормозов хорошее.',
+        engine: 'Состояние двигателя хорошее.',
       };
-      return normalMessages[parameter] || 'Operating within normal range.';
+      return normalMessages[parameter] || 'Работает в пределах нормы.';
     }
 
     const [optLo, optHi] = optimal;
@@ -145,21 +145,23 @@ export class HealthIndexService {
 
     switch (parameter) {
       case 'temp':
-        return high ? 'Temperature is high; slow down.' : 'Engine is too cold.';
+        return high
+          ? 'Температура высокая, сбавьте скорость.'
+          : 'Двигатель слишком холодный.';
       case 'pressure':
-        return high ? 'Pressure is too high.' : 'Pressure is too low.';
+        return high ? 'Давление слишком высокое.' : 'Давление слишком низкое.';
       case 'fuel':
         return low
-          ? 'Fuel level is low; refuel immediately.'
-          : 'Fuel overflow.';
+          ? 'Низкий уровень топлива; немедленно заправьтесь.'
+          : 'Избыток топлива.';
       case 'speed':
-        return high ? 'Speed is dangerously high.' : 'Speed is unusually low.';
+        return high ? 'Скорость опасно высока.' : 'Скорость необычно низкая.';
       case 'brake':
-        return 'Brake performance is degraded.';
+        return 'Эффективность торможения ухудшается.';
       case 'engine':
-        return 'Engine performance is degraded.';
+        return 'Ухудшается работа двигателя.';
       default:
-        return `${parameter} needs attention.`;
+        return `Параметр ${parameter} нуждается во внимании.`;
     }
   }
 
